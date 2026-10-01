@@ -24,8 +24,6 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.webkit.WebBackForwardList;
-import android.webkit.WebHistoryItem;
 import android.widget.FrameLayout;
 
 import java.util.regex.Matcher;
@@ -103,6 +101,8 @@ public class Tab {
         s.setSupportMultipleWindows(false);
         applyUserAgent();
 
+        // Dark background to avoid white flash when loading pages / going back
+        webView.setBackgroundColor(0xFF0B0E14);
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
         webView.setScrollbarFadingEnabled(true);
@@ -187,16 +187,9 @@ public class Tab {
 
     public boolean goBack() {
         if (webView != null && webView.canGoBack()) {
-            WebBackForwardList list = webView.copyBackForwardList();
-            int idx = list.getCurrentIndex();
-            if (idx > 0) {
-                WebHistoryItem prev = list.getItemAtIndex(idx - 1);
-                String u = prev != null ? prev.getUrl() : null;
-                if (u != null && u.contains("home.local")) {
-                    loadHome();
-                    return true;
-                }
-            }
+            // Let WebView restore the previous page from its history / cache.
+            // This avoids the flicker caused by re-loading the home page via
+            // loadDataWithBaseURL on every back navigation.
             webView.goBack();
             return true;
         }

@@ -10,11 +10,19 @@ import android.webkit.WebSettings;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 
 public class KernelInstaller {
 
@@ -58,19 +66,22 @@ public class KernelInstaller {
         worker = new Thread(new Runnable() {
             @Override
             public void run() {
+                String lastError = "未知错误";
                 for (int attempt = 1; attempt <= MAX_ATTEMPTS && !cancelled; attempt++) {
-                    if (attemptDownload(url, listener, attempt)) return;
+                    String err = attemptDownload(url, listener, attempt);
+                    if (err == null) return;
+                    lastError = err;
                     if (cancelled) return;
                     if (attempt < MAX_ATTEMPTS) {
                         postStatus(listener, "连接异常，正在重试 (" + attempt + "/"
-                                + (MAX_ATTEMPTS - 1) + ")...");
+                                + (MAX_ATTEMPTS - 1) + ")...  " + err);
                         try {
                             Thread.sleep(RETRY_DELAY_MS);
                         } catch (InterruptedException ie) {
                             return;
                         }
                     } else {
-                        postError(listener, "多次重试后仍下载失败");
+                        postError(listener, "多次重试后仍下载失败：" + lastError);
                     }
                 }
             }
@@ -78,27 +89,38 @@ public class KernelInstaller {
         worker.start();
     }
 
-    private boolean attemptDownload(String url, Listener listener, int attempt) {
+    /**
+     * @return null on success, error message on failure
+     */
+    private String attemptDownload(String url, Listener listener, int attempt) {
         HttpURLConnection conn = null;
         InputStream input = null;
         FileOutputStream output = null;
         try {
-            postStatus(listener, attempt == 1 ? "正在连接..." : "正在重试...");
+            postStatus(listener, attempt == 1 ? "正在连接..." : "正在重试连接...");
             File target = targetFile();
             File parent = target.getParentFile();
             if (parent != null && !parent.exists()) parent.mkdirs();
             if (target.exists()) target.delete();
 
             conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setConnectTimeout(20000);
-            conn.setReadTimeout(30000);
+            conn.setConnectTimeout(25000);
+            conn.setReadTimeout(45000);
             conn.setInstanceFollowRedirects(true);
             conn.setRequestProperty("Accept", "application/vnd.android.package-archive");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 5.1) "
+                    + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.0.0 Safari/537.36");
+
+            // Android 5.1 does not enable TLS 1.2 by default; GitHub requires it.
+            if (conn instanceof HttpsURLConnection) {
+                applyTLS12((HttpsURLConnection) conn);
+            }
+
             conn.connect();
 
             int code = conn.getResponseCode();
             if (code < 200 || code >= 300) {
-                return false;
+                return "HTTP " + code;
             }
 
             long total = conn.getContentLength();
@@ -117,7 +139,7 @@ public class KernelInstaller {
                 if (cancelled) {
                     output.close();
                     if (target.exists()) target.delete();
-                    return false;
+                    return "已取消";
                 }
                 output.write(buffer, 0, read);
                 downloaded += read;
@@ -132,16 +154,77 @@ public class KernelInstaller {
             input.close();
 
             if (target.length() < 1024 * 1024) {
-                return false;
+                return "文件过小 (" + target.length() + " bytes)，可能下载不完整";
             }
             postReady(listener, target.getAbsolutePath());
-            return true;
+            return null;
         } catch (Throwable t) {
-            return false;
+            String msg = t.getMessage();
+            if (msg == null || msg.length() == 0) msg = t.getClass().getSimpleName();
+            return msg;
         } finally {
             try { if (output != null) output.close(); } catch (Throwable ignored) {}
             try { if (input != null) input.close(); } catch (Throwable ignored) {}
             if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * Force-enable TLS 1.2 on Android 5.1 where it is supported but not
+     * enabled by default in HttpsURLConnection.
+     */
+    private static void applyTLS12(HttpsURLConnection conn) {
+        try {
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, null, null);
+            conn.setSSLSocketFactory(new Tls12SocketFactory(sc.getSocketFactory()));
+        } catch (NoSuchAlgorithmException e) {
+            // TLS not available at all; leave default
+        } catch (KeyManagementException e) {
+            // leave default
+        }
+    }
+
+    /**
+     * Wraps an SSLSocketFactory and forces TLS 1.2 (and 1.1/1.0 fallback)
+     * on every created socket. Required for Android 5.1 talking to modern
+     * HTTPS endpoints that refuse TLS 1.0.
+     */
+    private static class Tls12SocketFactory extends SSLSocketFactory {
+        private final SSLSocketFactory delegate;
+        private static final String[] PROTOCOLS = {"TLSv1.2", "TLSv1.1", "TLSv1"};
+
+        Tls12SocketFactory(SSLSocketFactory base) {
+            this.delegate = base;
+        }
+
+        private javax.net.ssl.SSLSocket patch(javax.net.ssl.SSLSocket s) {
+            try {
+                s.setEnabledProtocols(PROTOCOLS);
+            } catch (Throwable ignored) {}
+            return s;
+        }
+
+        @Override public String[] getDefaultCipherSuites() { return delegate.getDefaultCipherSuites(); }
+        @Override public String[] getSupportedCipherSuites() { return delegate.getSupportedCipherSuites(); }
+
+        @Override public java.net.Socket createSocket() throws IOException {
+            return patch((SSLSocket) delegate.createSocket());
+        }
+        @Override public java.net.Socket createSocket(java.net.Socket s, String host, int port, boolean autoClose) throws IOException {
+            return patch((SSLSocket) delegate.createSocket(s, host, port, autoClose));
+        }
+        @Override public java.net.Socket createSocket(String host, int port) throws IOException {
+            return patch((SSLSocket) delegate.createSocket(host, port));
+        }
+        @Override public java.net.Socket createSocket(String host, int port, java.net.InetAddress localHost, int localPort) throws IOException {
+            return patch((SSLSocket) delegate.createSocket(host, port, localHost, localPort));
+        }
+        @Override public java.net.Socket createSocket(java.net.InetAddress host, int port) throws IOException {
+            return patch((SSLSocket) delegate.createSocket(host, port));
+        }
+        @Override public java.net.Socket createSocket(java.net.InetAddress address, int port, java.net.InetAddress localAddress, int localPort) throws IOException {
+            return patch((SSLSocket) delegate.createSocket(address, port, localAddress, localPort));
         }
     }
 
@@ -163,15 +246,50 @@ public class KernelInstaller {
         return f.exists() && f.length() > 1024 * 1024;
     }
 
+    /**
+     * Launch the system package installer for the given APK.
+     * Uses ACTION_INSTALL_PACKAGE and tries to pin the package installer
+     * explicitly so that file managers (e.g. Baidu Netdisk) do not hijack
+     * the VIEW intent.
+     */
     public static void installApk(Activity activity, String path) {
+        File file = new File(path);
+        if (!file.exists()) return;
+        Uri uri = Uri.fromFile(file);
+
+        Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+        intent.setDataAndType(uri, "application/vnd.android.package-archive");
+        intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        // Try the standard package installer first to avoid hijacking by
+        // third-party file managers / cloud storage apps.
+        String[] installers = {
+            "com.android.packageinstaller",
+            "com.google.android.packageinstaller",
+        };
+        for (String pkg : installers) {
+            try {
+                Intent pinned = new Intent(intent);
+                pinned.setPackage(pkg);
+                activity.startActivity(pinned);
+                return;
+            } catch (Throwable ignored) {
+                // try next
+            }
+        }
+        // Fallback: un-pinned intent, system will resolve
         try {
-            File file = new File(path);
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(Uri.fromFile(file),
-                    "application/vnd.android.package-archive");
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(intent);
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            // Last resort: ACTION_VIEW
+            try {
+                Intent view = new Intent(Intent.ACTION_VIEW);
+                view.setDataAndType(uri, "application/vnd.android.package-archive");
+                view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(view);
+            } catch (Throwable ignored) {}
+        }
     }
 
     private void postStatus(final Listener l, final String s) {
