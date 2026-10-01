@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -20,11 +19,11 @@ public class VirtualMouse extends View {
     private static final int LEFT = 2;
     private static final int RIGHT = 3;
 
-    private static final float BASE_SPEED = 520f;
-    private static final float MAX_SPEED = 2400f;
-    private static final float ACCEL = 2600f;
+    private static final float BASE_SPEED = 190f;
+    private static final float MAX_SPEED = 820f;
+    private static final float ACCEL = 950f;
     private static final float EDGE = 6f;
-    private static final long SCROLL_INTERVAL_MS = 140;
+    private static final long SCROLL_INTERVAL_MS = 160;
 
     public interface ScrollListener {
         void onScroll(float vertical, float horizontal);
@@ -46,9 +45,9 @@ public class VirtualMouse extends View {
     private boolean wasAtBottom;
     private long lastScrollTime;
 
-    private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path arrow = new Path();
+    private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint haloPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public VirtualMouse(Activity activity, View root) {
         super(activity);
@@ -57,24 +56,19 @@ public class VirtualMouse extends View {
         setClickable(false);
         setFocusable(false);
         setWillNotDraw(false);
-        fillPaint.setColor(Color.WHITE);
-        fillPaint.setStyle(Paint.Style.FILL);
-        strokePaint.setColor(Color.argb(220, 0, 0, 0));
-        strokePaint.setStyle(Paint.Style.STROKE);
-        strokePaint.setStrokeWidth(1.6f);
-        strokePaint.setStrokeJoin(Paint.Join.ROUND);
-        buildArrow();
+        float d = getResources().getDisplayMetrics().density;
+        ringPaint.setColor(Color.argb(235, 255, 255, 255));
+        ringPaint.setStyle(Paint.Style.STROKE);
+        ringPaint.setStrokeWidth(2.2f * d);
+        ringPaint.setStrokeJoin(Paint.Join.ROUND);
+        dotPaint.setColor(Color.argb(235, 255, 255, 255));
+        dotPaint.setStyle(Paint.Style.FILL);
+        haloPaint.setColor(Color.argb(45, 255, 255, 255));
+        haloPaint.setStyle(Paint.Style.FILL);
     }
 
-    private void buildArrow() {
-        arrow.moveTo(0f, 0f);
-        arrow.lineTo(0f, 17f);
-        arrow.lineTo(4.5f, 12.8f);
-        arrow.lineTo(7.5f, 19.5f);
-        arrow.lineTo(9.8f, 18.5f);
-        arrow.lineTo(6.8f, 11.8f);
-        arrow.lineTo(12.5f, 11.8f);
-        arrow.close();
+    private float ringRadius() {
+        return getResources().getDisplayMetrics().density * 12f;
     }
 
     public void addToWindow(ViewGroup decorContent) {
@@ -298,13 +292,13 @@ public class VirtualMouse extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (!visible) return;
-        int save = canvas.save();
-        canvas.translate(mx, my);
-        float scale = getResources().getDisplayMetrics().density * 1.15f;
-        canvas.scale(scale, scale);
-        canvas.drawPath(arrow, fillPaint);
-        canvas.drawPath(arrow, strokePaint);
-        canvas.restoreToCount(save);
+        float r = ringRadius();
+        float dot = getResources().getDisplayMetrics().density * 1.8f;
+        if (pressing) {
+            canvas.drawCircle(mx, my, r, haloPaint);
+        }
+        canvas.drawCircle(mx, my, r, ringPaint);
+        canvas.drawCircle(mx, my, dot, dotPaint);
     }
 
     @Override
