@@ -32,7 +32,7 @@ import java.util.Map;
 public class BrowserActivity extends Activity implements Tab.Callback, ChromeToolbar.Listener {
 
     private static final String GECKO_PKG = "com.tclbrowser.gecko";
-    private static final String GECKO_APK_URL = "https://REPLACE_ME/gecko.apk";
+    private static final String GECKO_APK_URL = "https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.0/engine.apk";
     private static final long MOUSE_HIDE_MS = 4500;
 
     private FrameLayout root;

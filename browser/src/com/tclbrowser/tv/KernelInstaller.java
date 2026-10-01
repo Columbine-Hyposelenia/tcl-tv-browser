@@ -50,79 +50,99 @@ public class KernelInstaller {
         return currentMajor(context) < 90;
     }
 
+    private static final int MAX_ATTEMPTS = 3;
+    private static final long RETRY_DELAY_MS = 2500;
+
     public void download(final String url, final Listener listener) {
         cancelled = false;
         worker = new Thread(new Runnable() {
             @Override
             public void run() {
-                HttpURLConnection conn = null;
-                InputStream input = null;
-                FileOutputStream output = null;
-                try {
-                    postStatus(listener, "正在连接...");
-                    File target = targetFile();
-                    File parent = target.getParentFile();
-                    if (parent != null && !parent.exists()) parent.mkdirs();
-                    if (target.exists()) target.delete();
-
-                    conn = (HttpURLConnection) new URL(url).openConnection();
-                    conn.setConnectTimeout(20000);
-                    conn.setReadTimeout(30000);
-                    conn.setInstanceFollowRedirects(true);
-                    conn.setRequestProperty("Accept", "application/vnd.android.package-archive");
-                    conn.connect();
-
-                    int code = conn.getResponseCode();
-                    if (code < 200 || code >= 300) {
-                        postError(listener, "HTTP " + code);
-                        return;
-                    }
-
-                    long total = conn.getContentLength();
-                    String totalHeader = conn.getHeaderField("Content-Length");
-                    if (total <= 0 && totalHeader != null) {
-                        try { total = Long.parseLong(totalHeader); } catch (Throwable ignored) {}
-                    }
-
-                    input = conn.getInputStream();
-                    output = new FileOutputStream(target);
-                    byte[] buffer = new byte[65536];
-                    long downloaded = 0;
-                    int lastPercent = -1;
-                    int read;
-                    while ((read = input.read(buffer)) > 0) {
-                        if (cancelled) {
-                            output.close();
-                            if (target.exists()) target.delete();
+                for (int attempt = 1; attempt <= MAX_ATTEMPTS && !cancelled; attempt++) {
+                    if (attemptDownload(url, listener, attempt)) return;
+                    if (cancelled) return;
+                    if (attempt < MAX_ATTEMPTS) {
+                        postStatus(listener, "连接异常，正在重试 (" + attempt + "/"
+                                + (MAX_ATTEMPTS - 1) + ")...");
+                        try {
+                            Thread.sleep(RETRY_DELAY_MS);
+                        } catch (InterruptedException ie) {
                             return;
                         }
-                        output.write(buffer, 0, read);
-                        downloaded += read;
-                        int percent = total > 0 ? (int) (downloaded * 100 / total) : 0;
-                        if (percent != lastPercent) {
-                            lastPercent = percent;
-                            postProgress(listener, percent, downloaded, total);
-                        }
+                    } else {
+                        postError(listener, "多次重试后仍下载失败");
                     }
-                    output.flush();
-                    output.close();
-                    input.close();
-
-                    if (target.length() < 1024 * 1024) {
-                        postError(listener, "下载文件过小");
-                        return;
-                    }
-                    postReady(listener, target.getAbsolutePath());
-                } catch (Throwable t) {
-                    postError(listener, t.getMessage() != null ? t.getMessage() : "下载失败");
-                } finally {
-                    try { if (output != null) output.close(); } catch (Throwable ignored) {}
-                    try { if (input != null) input.close(); } catch (Throwable ignored) {}
-                    if (conn != null) conn.disconnect();
                 }
             }
         }, "kernel-download");
         worker.start();
+    }
+
+    private boolean attemptDownload(String url, Listener listener, int attempt) {
+        HttpURLConnection conn = null;
+        InputStream input = null;
+        FileOutputStream output = null;
+        try {
+            postStatus(listener, attempt == 1 ? "正在连接..." : "正在重试...");
+            File target = targetFile();
+            File parent = target.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            if (target.exists()) target.delete();
+
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(30000);
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestProperty("Accept", "application/vnd.android.package-archive");
+            conn.connect();
+
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) {
+                return false;
+            }
+
+            long total = conn.getContentLength();
+            String totalHeader = conn.getHeaderField("Content-Length");
+            if (total <= 0 && totalHeader != null) {
+                try { total = Long.parseLong(totalHeader); } catch (Throwable ignored) {}
+            }
+
+            input = conn.getInputStream();
+            output = new FileOutputStream(target);
+            byte[] buffer = new byte[65536];
+            long downloaded = 0;
+            int lastPercent = -1;
+            int read;
+            while ((read = input.read(buffer)) > 0) {
+                if (cancelled) {
+                    output.close();
+                    if (target.exists()) target.delete();
+                    return false;
+                }
+                output.write(buffer, 0, read);
+                downloaded += read;
+                int percent = total > 0 ? (int) (downloaded * 100 / total) : 0;
+                if (percent != lastPercent) {
+                    lastPercent = percent;
+                    postProgress(listener, percent, downloaded, total);
+                }
+            }
+            output.flush();
+            output.close();
+            input.close();
+
+            if (target.length() < 1024 * 1024) {
+                return false;
+            }
+            postReady(listener, target.getAbsolutePath());
+            return true;
+        } catch (Throwable t) {
+            return false;
+        } finally {
+            try { if (output != null) output.close(); } catch (Throwable ignored) {}
+            try { if (input != null) input.close(); } catch (Throwable ignored) {}
+            if (conn != null) conn.disconnect();
+        }
     }
 
     public void cancel() {
