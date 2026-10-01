@@ -1,0 +1,23 @@
+.tmp-tool-results/
+
+# Build outputs
+**/bin/
+**/gen/
+**/obj/
+**/dex/
+**/staging/
+**/build/
+**/sources.txt
+
+# Re-downloadable research artifacts
+kernel_research/maven_cache/
+kernel_research/Ava/
+kernel_research/libs/
+kernel_research/gv115/
+kernel_research/gv144/
+kernel_research/*.aar
+kernel_research/**/*.apk
+kernel_research/**/*.apk.xz
+
+# OS/editor noise
+.DS_Store
