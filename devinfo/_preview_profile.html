@@ -1,0 +1,59 @@
+<html style="margin:0;padding:0;">
+<div style="background-color:transparent;box-sizing:border-box;font-family:'PingFang SC','Segoe UI',Arial,sans-serif;">
+
+  <div style="font-size:15px;font-weight:600;color:#1A1B1C;">最终设备档案（已实测确认）</div>
+
+  <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;">
+
+    <div style="flex:1 1 200px;padding:10px 12px;background:#fff;border:1px solid #E4E3DD;border-radius:12px;">
+      <div style="font-size:12.5px;font-weight:700;color:#2E7E77;">核心硬件</div>
+      <div style="margin-top:5px;font-size:11.5px;color:#3A3B3C;line-height:1.8;">
+        SoC：<b>Amlogic T968</b><br>
+        CPU：4 × Cortex-A53 @1.8GHz（ARMv8 硬件）<br>
+        GPU：Mali-T830 MP2<br>
+        RAM：<b>1.2 GB</b>（采集时可用约 493MB）<br>
+        ROM：8 GB（data 可用 3.86GB）
+      </div>
+    </div>
+
+    <div style="flex:1 1 200px;padding:10px 12px;background:#fff;border:1px solid #E4E3DD;border-radius:12px;">
+      <div style="font-size:12.5px;font-weight:700;color:#2E7E77;">系统</div>
+      <div style="margin-top:5px;font-size:11.5px;color:#3A3B3C;line-height:1.8;">
+        Android <b>5.1.1（API 22）</b>，<b>32 位</b>系统<br>
+        系统 WebView：<b>Chromium 39</b>（2014 年）<br>
+        构建类型：userdebug / dev-keys<br>
+        固件日期：2020-08-26<br>
+        指令集：armeabi-v7a, armeabi
+      </div>
+    </div>
+
+    <div style="flex:1 1 200px;padding:10px 12px;background:#fff;border:1px solid #E4E3DD;border-radius:12px;">
+      <div style="font-size:12.5px;font-weight:700;color:#2E7E77;">显示与网络</div>
+      <div style="margin-top:5px;font-size:11.5px;color:#3A3B3C;line-height:1.8;">
+        分辨率：1920 × 1080，60Hz<br>
+        密度：240 dpi（1.5× hdpi）<br>
+        WiFi：<b>2.4G</b>（SSID: CMCC-3s2w）<br>
+        有全局 IPv6<br>
+        支持蓝牙、USB Host
+      </div>
+    </div>
+
+    <div style="flex:1 1 200px;padding:10px 12px;background:#fff;border:1px solid #E4E3DD;border-radius:12px;">
+      <div style="font-size:12.5px;font-weight:700;color:#2E7E77;">视频解码能力</div>
+      <div style="margin-top:5px;font-size:11.5px;color:#3A3B3C;line-height:1.8;">
+        硬解：<b>H.265、H.264</b>、MPEG2、VC-1<br>
+        软解：VP9、VP8、RealMedia<br>
+        音频：AC3、EAC3、DTS、FLAC、APE<br>
+        无 AV1
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:10px;padding:10px 12px;background:rgba(0,0,0,0.03);border-radius:12px;font-size:11.5px;color:#6B7280;line-height:1.7;">
+    输入设备：红外遥控器（aml_keypad，驱动注册了 mouse 能力）、USB 键盘（SONIX 复合设备，含多媒体/鼠标接口）、USB 鼠标（系统级）。
+    结合你之前实测（不接鼠标时仅浏览器内方向键可出虚拟鼠标），<b>方向键虚拟鼠标仍需我们在浏览器内自行实现</b>。
+  </div>
+
+</div>
+</html>
