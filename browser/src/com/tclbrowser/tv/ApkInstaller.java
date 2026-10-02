@@ -16,6 +16,7 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -204,7 +205,9 @@ public final class ApkInstaller {
         }
 
         File rootTarget = publicFile != null ? publicFile : source;
-        if (tryRootInstall(rootTarget, log)) {
+        RootResult rootResult = runRootInstall(rootTarget);
+        append(log, rootResult.diag);
+        if (rootResult.success) {
             return new Result(true, "Root pm install succeeded",
                     log.toString(), publicPath);
         }
@@ -356,26 +359,52 @@ public final class ApkInstaller {
         }
     }
 
-    private static boolean tryRootInstall(File apk, StringBuilder log) {
+    private static final class RootResult {
+        final boolean success;
+        final String diag;
+        RootResult(boolean success, String diag) {
+            this.success = success;
+            this.diag = diag;
+        }
+    }
+
+    /**
+     * Attempt a root install. Before invoking the package manager, lower the
+     * dex2oat compiler filter to interpret-only so the large GeckoView DEX
+     * does not exhaust the limited RAM during AOT compilation. All output,
+     * including the exact Failure reason, is captured.
+     */
+    private static RootResult runRootInstall(File apk) {
         Process process = null;
         try {
-            process = Runtime.getRuntime().exec("su");
+            ProcessBuilder pb = new ProcessBuilder("su");
+            pb.redirectErrorStream(true);
+            process = pb.start();
             OutputStream os = process.getOutputStream();
-            String cmd = "pm install -r " + apk.getAbsolutePath() + "\n"
+            String script =
+                    "setprop dalvik.vm.dex2oat-filter interpret-only\n"
+                    + "pm install -r " + apk.getAbsolutePath() + "\n"
                     + "exit\n";
-            os.write(cmd.getBytes());
+            os.write(script.getBytes());
             os.flush();
             os.close();
-            int exit = process.waitFor();
-            if (exit == 0) {
-                append(log, "Root pm install reported success");
-                return true;
+
+            InputStream is = process.getInputStream();
+            StringBuilder out = new StringBuilder();
+            byte[] buffer = new byte[4096];
+            int read;
+            while ((read = is.read(buffer)) > 0) {
+                out.append(new String(buffer, 0, read));
             }
-            append(log, "su pm install exited with code " + exit);
-            return false;
+            int exit = process.waitFor();
+            String output = out.toString();
+            boolean success = output.contains("Success");
+            String diag = "Root install output (exit " + exit + "):\n"
+                    + output + "\n";
+            return new RootResult(success, diag);
         } catch (Throwable t) {
-            append(log, "Root install unavailable: " + rootMessage(t));
-            return false;
+            return new RootResult(false,
+                    "Root install unavailable: " + rootMessage(t) + "\n");
         } finally {
             if (process != null) {
                 try { process.destroy(); } catch (Throwable ignored) {}
