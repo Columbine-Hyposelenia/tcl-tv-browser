@@ -47,8 +47,6 @@ public class GeckoEngineActivity extends Activity {
 
     private static final String CLOUD_URL = "https://ys.mihoyo.com/cloud/";
 
-    private static final int BG_COLOR = 0xFF0B0E16;
-
     private static GeckoRuntime runtime;
 
     private FrameLayout root;
@@ -176,8 +174,7 @@ public class GeckoEngineActivity extends Activity {
         geckoView = new GeckoView(this);
         geckoView.setFocusable(true);
         geckoView.setFocusableInTouchMode(true);
-        geckoView.setViewBackend(GeckoView.BACKEND_SURFACE_VIEW);
-        geckoView.coverUntilFirstPaint(BG_COLOR);
+        geckoView.setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW);
         contentFrame.addView(geckoView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -567,7 +564,6 @@ public class GeckoEngineActivity extends Activity {
 
         popupView = new GeckoView(this);
         popupView.setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW);
-        popupView.coverUntilFirstPaint(BG_COLOR);
         popupView.setFocusable(true);
         wrap.addView(popupView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
