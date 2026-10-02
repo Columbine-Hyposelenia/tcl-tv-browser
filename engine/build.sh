@@ -68,9 +68,11 @@ cp "$LIB_DIR"/*.so staging/lib/armeabi-v7a/
 mkdir -p staging/assets
 (cd "$ASSET_DIR" && find . -type f -exec cp --parents {} "$PROJECT/staging/assets/" \;)
 
-# 5. Add everything into the apk
+# 5. Add everything into the apk. '%P' strips the leading "./" that
+# "find ." otherwise emits, so entries are named classes.dex,
+# lib/<abi>/x.so and assets/x (a leading "./" breaks the 5.1 installer).
 cd staging
-"$BT/aapt" add ../bin/app.unaligned.apk $(find . -type f | sort)
+"$BT/aapt" add ../bin/app.unaligned.apk $(find . -type f -printf '%P\n' | sort)
 cd ..
 
 # 6. Align
