@@ -43,12 +43,13 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
     // Mirror list: mainland-China-friendly proxies first, GitHub direct as fallback.
     // The TV often cannot establish a TCP connection to github.com:443, so we
     // try gh-proxy.com and cors.isteed.cc before falling back to direct GitHub.
-    // v1.6: TextureView, correct toolbar icons, about:support diagnostics,
-    // crash/kill auto-recovery, keyboard/remote input split, precise mouse.
+    // v1.7: TextureView, correct icons, about:support, crash/kill auto-recovery,
+    // learn-based keyboard detection (remote arrows always drive the mouse),
+    // precise virtual mouse.
     private static final String[] GECKO_APK_URLS = {
-        "https://gh-proxy.com/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.6/engine.apk",
-        "https://cors.isteed.cc/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.6/engine.apk",
-        "https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.6/engine.apk",
+        "https://gh-proxy.com/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.7/engine.apk",
+        "https://cors.isteed.cc/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.7/engine.apk",
+        "https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.7/engine.apk",
     };
     private static final long MOUSE_HIDE_MS = 4500;
 

@@ -698,16 +698,27 @@ public class GeckoEngineActivity extends Activity {
         } catch (Throwable ignored) {}
     }
 
-    private boolean isFullKeyboard(final InputDevice device) {
-        return device != null
-                && device.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC;
+    // Device ids that have proven themselves to be real alphabetic keyboards by
+    // emitting a letter key or a Ctrl/Alt chord. Remotes never emit those, so
+    // they are never registered and their arrows always drive the mouse.
+    private final java.util.HashSet<Integer> keyboardDevices = new java.util.HashSet<>();
+
+    private void learnInputDevice(final KeyEvent event) {
+        int code = event.getKeyCode();
+        boolean letter = code >= KeyEvent.KEYCODE_A && code <= KeyEvent.KEYCODE_Z;
+        boolean chord = event.isCtrlPressed() || event.isAltPressed();
+        int id = event.getDeviceId();
+        if ((letter || chord) && id >= 0) {
+            keyboardDevices.add(id);
+        }
     }
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        learnInputDevice(event);
         int action = event.getAction();
         int code = event.getKeyCode();
-        boolean fullKeyboard = isFullKeyboard(event.getDevice());
+        boolean fullKeyboard = keyboardDevices.contains(event.getDeviceId());
 
         if (toolbar.getUrlBar().isEditing()) {
             if (code == KeyEvent.KEYCODE_BACK && action == KeyEvent.ACTION_UP) {

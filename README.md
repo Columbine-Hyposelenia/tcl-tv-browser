@@ -26,6 +26,9 @@
 
 ## 目标设备
 
+> 完整的设备硬件/系统/输入/视频/安装机制档案（含踩坑记录与版本历史）见
+> [`docs/DEVICE_INFO.md`](docs/DEVICE_INFO.md)，后续开发以该文档为准。
+
 - SoC：Amlogic T968（4×Cortex-A53），GPU Mali-T830 MP2
 - 系统：Android 5.1.1（SDK 22），ABI `armeabi-v7a`
 - 内存约 1.2GB，闪存 8GB，屏幕 1920×1080
