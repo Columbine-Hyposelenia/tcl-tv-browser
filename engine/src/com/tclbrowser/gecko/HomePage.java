@@ -27,12 +27,13 @@ public final class HomePage {
                  .append("<span class='label'>").append(s[0]).append("</span></a>");
         }
         return "<!DOCTYPE html><html lang='zh'><head><meta charset='utf-8'>"
-            + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            + "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no'>"
             + "<title>Home</title><style>"
             + "*{margin:0;padding:0;box-sizing:border-box;}"
             + "html,body{height:100%;}"
+            + "html{background:#0b0e16;}"
             + "body{background:radial-gradient(1200px 600px at 50% -10%,#16203a,#0b0e16 70%);"
-            + "font-family:'Segoe UI','PingFang SC',Arial,sans-serif;color:#e8ecf4;"
+            + "font-family:'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;color:#e8ecf4;"
             + "display:flex;flex-direction:column;align-items:center;overflow:hidden;}"
             + ".head{margin-top:6vh;text-align:center;}"
             + ".logo{font-size:34px;font-weight:700;letter-spacing:1px;"
@@ -58,10 +59,10 @@ public final class HomePage {
             + ".foot{margin-top:auto;padding:18px;color:#5a6378;font-size:12px;}"
             + "</style></head><body>"
             + "<div class='head'><div class='logo'>TCL Browser</div>"
-            + "<div class='sub'>&#26032; use the address bar or pick a site below</div>"
-            + "<a class='search' href='https://cn.bing.com'>&#128269; Search the web</a></div>"
+            + "<div class='sub'>使用地址栏搜索，或点击下方网站</div>"
+            + "<a class='search' href='https://cn.bing.com'>搜索网络</a></div>"
             + "<div class='grid'>" + cards + "</div>"
-            + "<div class='foot'>Remote D-Pad moves the cursor, OK to click</div>"
+            + "<div class='foot'>遥控方向键移动光标，确认键点击</div>"
             + "</body></html>";
     }
 

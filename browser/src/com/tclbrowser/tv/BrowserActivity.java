@@ -441,29 +441,29 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
 
     private void showShortcutsHelp() {
         final String[] rows = {
-            "F5 / Ctrl+R  -  Reload",
-            "Esc  -  Stop / Exit fullscreen",
-            "Alt+Left / Alt+Right  -  Back / Forward",
-            "Backspace  -  Back",
-            "Ctrl+L / F6 / Alt+D  -  Address bar",
-            "Space / PageDown  -  Scroll down",
-            "PageUp  -  Scroll up",
-            "Home / End  -  Top / Bottom",
-            "Ctrl + / Ctrl -  -  Zoom in / out",
-            "Ctrl+0  -  Reset zoom",
-            "Ctrl+F  -  Find in page",
-            "Ctrl+J  -  Downloads",
-            "Ctrl+T  -  Home",
-            "Ctrl+W  -  Close",
-            "F10  -  Menu",
-            "F11  -  Fullscreen UI",
-            "F12  -  Sniff videos",
-            "D-Pad  -  Move cursor, OK to click"
+            "F5 / Ctrl+R  -  刷新页面",
+            "Esc  -  停止加载 / 退出全屏",
+            "Alt+← / Alt+→  -  后退 / 前进",
+            "Delete  -  后退",
+            "Ctrl+L / F6  -  选中地址栏",
+            "空格 / PgDn  -  向下翻页",
+            "PgUp  -  向上翻页",
+            "Home / End  -  页首 / 页尾",
+            "Ctrl+加号 / Ctrl+减号  -  放大 / 缩小",
+            "Ctrl+0  -  重置缩放",
+            "Ctrl+F  -  页内查找",
+            "Ctrl+J  -  下载管理",
+            "Ctrl+T  -  返回主页",
+            "Ctrl+W  -  退出浏览器",
+            "F10 / 菜单键  -  打开菜单",
+            "F11  -  全屏界面",
+            "F12  -  嗅探视频",
+            "方向键  -  移动光标，确认键点击"
         };
         new AlertDialog.Builder(this)
                 .setTitle("键盘快捷键")
                 .setItems(rows, null)
-                .setPositiveButton("Close", null)
+                .setPositiveButton("关闭", null)
                 .show();
     }
 

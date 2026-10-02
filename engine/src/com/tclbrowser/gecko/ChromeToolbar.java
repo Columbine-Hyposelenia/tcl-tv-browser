@@ -2,8 +2,6 @@ package com.tclbrowser.gecko;
 
 import android.app.Activity;
 import android.content.res.TypedArray;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -31,8 +29,6 @@ public class ChromeToolbar extends LinearLayout {
     private final UrlBar urlBar;
     private final ProgressBar progress;
     private Listener listener;
-    private boolean loading;
-    private boolean isDesktop;
 
     public ChromeToolbar(Activity activity) {
         super(activity);
@@ -42,7 +38,6 @@ public class ChromeToolbar extends LinearLayout {
         int padV = dp(5);
         setPadding(padH, padV, padH, padV);
         setBackgroundColor(0xFFF6F7F9);
-        setVerticalGravity(Gravity.CENTER_VERTICAL);
 
         back = makeButton(R.drawable.ic_back);
         forward = makeButton(R.drawable.ic_forward);
@@ -85,10 +80,6 @@ public class ChromeToolbar extends LinearLayout {
         });
     }
 
-    public ProgressBar getProgressBar() {
-        return progress;
-    }
-
     public UrlBar getUrlBar() {
         return urlBar;
     }
@@ -112,7 +103,6 @@ public class ChromeToolbar extends LinearLayout {
     }
 
     public void setLoading(boolean loading) {
-        this.loading = loading;
         if (loading) {
             reload.setImageResource(R.drawable.ic_close);
         } else {
@@ -131,7 +121,6 @@ public class ChromeToolbar extends LinearLayout {
     }
 
     public void setDesktop(boolean desktopMode) {
-        isDesktop = desktopMode;
         desktop.setAlpha(desktopMode ? 1f : 0.4f);
     }
 
@@ -143,7 +132,6 @@ public class ChromeToolbar extends LinearLayout {
         b.setScaleType(ImageView.ScaleType.CENTER);
         b.setFocusable(true);
         b.setClickable(true);
-        TypedValue out = new TypedValue();
         try {
             TypedArray arr = getContext().getTheme().obtainStyledAttributes(
                     new int[]{android.R.attr.selectableItemBackgroundBorderless});

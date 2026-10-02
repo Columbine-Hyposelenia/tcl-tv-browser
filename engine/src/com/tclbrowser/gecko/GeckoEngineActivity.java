@@ -3,13 +3,10 @@ package com.tclbrowser.gecko;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
-import android.content.ClipData;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -29,7 +26,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONObject;
 import org.mozilla.geckoview.AllowOrDeny;
 import org.mozilla.geckoview.ContentBlocking;
 import org.mozilla.geckoview.GeckoResult;
@@ -45,11 +41,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Map;
 
 public class GeckoEngineActivity extends Activity {
 
-    private static final String HOME_URL = "app://home.local";
     private static final String CLOUD_URL = "https://ys.mihoyo.com/cloud/";
 
     private static GeckoRuntime runtime;
@@ -273,9 +267,8 @@ public class GeckoEngineActivity extends Activity {
                 return openPopup(uri);
             }
             @Override public GeckoResult<String> onLoadError(GeckoSession session, String uri,
-                    WebRequestError error) {
-                if (isPopup) return GeckoResult.fromValue(uri);
-                return GeckoResult.fromValue(uri);
+                    WebRequestError	error) {
+                return GeckoResult.fromValue(buildErrorPage(uri, error));
             }
         });
 
@@ -388,6 +381,55 @@ public class GeckoEngineActivity extends Activity {
         });
     }
 
+    private String errorDescription(int code) {
+        switch (code) {
+            case WebRequestError.ERROR_UNKNOWN_HOST: return "无法找到服务器，请检查网址是否正确";
+            case WebRequestError.ERROR_CONNECTION_REFUSED: return "服务器拒绝了连接";
+            case WebRequestError.ERROR_TIMEOUT:
+            case WebRequestError.ERROR_NET_TIMEOUT: return "连接超时，请检查网络后重试";
+            case WebRequestError.ERROR_CONNECTION_RESET: return "连接被重置";
+            case WebRequestError.ERROR_NETWORK_CHANGED: return "网络已切换，请刷新重试";
+            case WebRequestError.ERROR_OFFLINE: return "设备未连接到网络";
+            case WebRequestError.ERROR_ADDRESS_UNREACHABLE: return "无法访问该地址";
+            case WebRequestError.ERROR_SECURITY_BAD_CERT:
+            case WebRequestError.ERROR_BAD_HSTS_CERT: return "网站安全证书存在问题";
+            case WebRequestError.ERROR_PROXY_CONNECTION_REFUSED: return "代理服务器连接失败";
+            case WebRequestError.ERROR_CONTENT_CRASHED: return "页面崩溃，请刷新重试";
+            case WebRequestError.ERROR_MALFORMED_URI: return "网址格式错误";
+            case WebRequestError.ERROR_REDIRECT_LOOP:
+            case WebRequestError.ERROR_TOO_MANY_REDIRECTS: return "页面重定向次数过多";
+            case WebRequestError.ERROR_FILE_NOT_FOUND: return "文件不存在";
+            case WebRequestError.ERROR_FILE_ACCESS_DENIED: return "文件访问被拒绝";
+            case WebRequestError.ERROR_UNKNOWN_URL_SCHEME: return "不支持的网址协议";
+            default: return "网络错误，错误码 " + code;
+        }
+    }
+
+    private String buildErrorPage(String uri, WebRequestError error) {
+        String safeUrl = uri != null ? uri.replace("'", "") : "";
+        String desc = errorDescription(error.code);
+        String page = "<!DOCTYPE html><html lang='zh'><head><meta charset='utf-8'>"
+            + "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no'>"
+            + "<style>"
+            + "*{margin:0;padding:0;box-sizing:border-box;}"
+            + "html{background:#0b0e14;}"
+            + "body{background:#0b0e14;font-family:'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;"
+            + "min-height:100vh;display:flex;align-items:center;justify-content:center;}"
+            + ".card{text-align:center;padding:40px;max-width:560px;}"
+            + ".code{font-size:84px;font-weight:700;color:#5b7cff;line-height:1;}"
+            + ".title{font-size:26px;font-weight:600;color:#e8ecf4;margin-top:16px;}"
+            + ".desc{font-size:15px;color:#94a0b8;margin-top:10px;line-height:1.6;}"
+            + ".url{font-size:13px;color:#7d88a0;margin-top:22px;word-break:break-all;"
+            + "background:#141b2d;padding:10px 14px;border-radius:8px;}"
+            + "</style></head><body><div class='card'>"
+            + "<div class='code'>!</div>"
+            + "<div class='title'>无法打开此页面</div>"
+            + "<div class='desc'>" + desc + "</div>"
+            + "<div class='url'>" + safeUrl + "</div>"
+            + "</div></body></html>";
+        return "data:text/html;charset=utf-8," + Uri.encode(page);
+    }
+
     private class ToolbarListener implements ChromeToolbar.Listener {
         @Override public void onBack() {
             if (popupFrame.getVisibility() == View.VISIBLE) {
@@ -420,16 +462,16 @@ public class GeckoEngineActivity extends Activity {
     private void openMenu() {
         final boolean popupShown = popupFrame.getVisibility() == View.VISIBLE;
         final String[] items = {
-            desktopMode ? "Desktop UA: ON" : "Desktop UA: OFF",
-            "Reload",
-            immersive ? "Exit Fullscreen UI" : "Fullscreen UI",
-            "Home",
-            "Cloud Genshin",
-            "Downloads",
-            popupShown ? "Close Popup" : "Keyboard Shortcuts"
+            desktopMode ? "桌面UA：开" : "桌面UA：关",
+            "刷新页面",
+            immersive ? "退出全屏界面" : "全屏界面",
+            "返回主页",
+            "云原神",
+            "下载管理",
+            popupShown ? "关闭弹窗" : "键盘快捷键"
         };
         new AlertDialog.Builder(this)
-                .setTitle("Menu")
+                .setTitle("菜单")
                 .setItems(items, new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog, int which) {
                         switch (which) {
@@ -460,32 +502,33 @@ public class GeckoEngineActivity extends Activity {
         } catch (Exception e) {
             File dir = Environment.getExternalStoragePublicDirectory(
                     Environment.DIRECTORY_DOWNLOADS);
-            toast("Downloads: " + dir.getAbsolutePath());
+            toast("下载目录：" + dir.getAbsolutePath());
         }
     }
 
     private void showShortcutsHelp() {
         final String[] rows = {
-            "F5 / Ctrl+R - Reload",
-            "Esc - Stop / Exit fullscreen",
-            "Alt+Left / Alt+Right - Back / Forward",
-            "Backspace - Back",
-            "Ctrl+L / F6 / Alt+D - Address bar",
-            "Space / PageDown - Scroll down",
-            "PageUp - Scroll up",
-            "Home / End - Top / Bottom",
-            "Ctrl + / Ctrl - - Zoom in / out",
-            "Ctrl+0 - Reset zoom",
-            "Ctrl+F - Find in page",
-            "Ctrl+T - Home",
-            "Ctrl+W - Close",
-            "F10 - Menu, F11 - Fullscreen UI",
-            "D-Pad - Move cursor, OK to click"
+            "F5 / Ctrl+R  -  刷新页面",
+            "Esc  -  停止加载 / 退出全屏",
+            "Alt+← / Alt+→  -  后退 / 前进",
+            "Delete  -  后退",
+            "Ctrl+L / F6  -  选中地址栏",
+            "空格 / PgDn  -  向下翻页",
+            "PgUp  -  向上翻页",
+            "Home / End  -  页首 / 页尾",
+            "Ctrl+加号 / Ctrl+减号  -  放大 / 缩小",
+            "Ctrl+0  -  重置缩放",
+            "Ctrl+F  -  页内查找",
+            "Ctrl+T  -  返回主页",
+            "Ctrl+W  -  退出浏览器",
+            "F10 / 菜单键  -  打开菜单",
+            "F11  -  全屏界面",
+            "方向键  -  移动光标，确认键点击"
         };
         new AlertDialog.Builder(this)
-                .setTitle("Keyboard Shortcuts")
+                .setTitle("键盘快捷键")
                 .setItems(rows, null)
-                .setPositiveButton("Close", null)
+                .setPositiveButton("关闭", null)
                 .show();
     }
 
@@ -497,7 +540,7 @@ public class GeckoEngineActivity extends Activity {
         wrap.setOrientation(LinearLayout.VERTICAL);
 
         TextView closeBar = new TextView(this);
-        closeBar.setText("  Popup window  -  Back / click to close");
+        closeBar.setText("  弹窗窗口  -  返回键 / 点击关闭");
         closeBar.setTextColor(0xFFFFFFFF);
         closeBar.setBackgroundColor(0xFF1F2430);
         closeBar.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -570,10 +613,10 @@ public class GeckoEngineActivity extends Activity {
                         out.write(buf, 0, n);
                     }
                     out.flush();
-                    toast("Downloaded: " + target.getName());
+                    toast("已下载：" + target.getName());
                     scanFile(target);
                 } catch (Exception e) {
-                    toast("Download failed");
+                    toast("下载失败");
                 } finally {
                     try { if (in != null) in.close(); } catch (Exception ignored) {}
                     try { if (out != null) out.close(); } catch (Exception ignored) {}
@@ -805,7 +848,7 @@ public class GeckoEngineActivity extends Activity {
     private void showFindDialog() {
         final EditText input = new EditText(this);
         input.setSingleLine(true);
-        input.setHint("Find in page");
+        input.setHint("输入查找内容");
         LinearLayout holder = new LinearLayout(this);
         holder.setOrientation(LinearLayout.VERTICAL);
         holder.setPadding(dp(20), dp(10), dp(20), 0);
@@ -813,9 +856,9 @@ public class GeckoEngineActivity extends Activity {
 
         final GeckoSession target = activeSession();
         AlertDialog d = new AlertDialog.Builder(this)
-                .setTitle("Find")
+                .setTitle("页内查找")
                 .setView(holder)
-                .setPositiveButton("Next", new DialogInterface.OnClickListener() {
+                .setPositiveButton("下一个", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog, int which) {
                         String q = input.getText().toString();
                         if (q.length() > 0) {
@@ -825,7 +868,7 @@ public class GeckoEngineActivity extends Activity {
                         }
                     }
                 })
-                .setNegativeButton("Prev", new DialogInterface.OnClickListener() {
+                .setNegativeButton("上一个", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog, int which) {
                         String q = input.getText().toString();
                         if (q.length() > 0) {

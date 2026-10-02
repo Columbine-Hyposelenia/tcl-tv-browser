@@ -2,7 +2,6 @@ package com.tclbrowser.tv;
 
 import android.app.Activity;
 import android.content.Context;
-import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -27,7 +26,6 @@ public class UrlBar extends LinearLayout {
     private final EditText edit;
     private final ImageView clear;
     private Listener listener;
-    private boolean showingUrl = true;
     private String currentUrl = "";
 
     public UrlBar(Activity activity) {
@@ -116,14 +114,8 @@ public class UrlBar extends LinearLayout {
     public void setUrl(String url) {
         currentUrl = url != null ? url : "";
         if (!edit.isFocused()) {
-            showingUrl = true;
-            edit.setText(displayText(currentUrl));
+            edit.setText(currentUrl);
         }
-    }
-
-    private String displayText(String url) {
-        if (url == null || url.isEmpty()) return "";
-        return url;
     }
 
     public void focusForInput() {
