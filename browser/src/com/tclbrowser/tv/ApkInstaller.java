@@ -1,12 +1,15 @@
 package com.tclbrowser.tv;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
 
@@ -19,28 +22,27 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Handles launching an APK installer through every channel available on the
- * device. The system WebView-based browser downloads the Gecko engine APK and
- * must hand it off to a package installer, but some TCL devices neither expose
- * a standard installer activity nor allow reading files inside the caller's
- * private Android/data directory. This class:
- *   1. copies the APK to the public Download directory so any installer can
- *      read it,
- *   2. enumerates every activity that can install/view an APK at runtime,
- *   3. tries the hidden PackageManager.installPackage framework method,
- *   4. tries a root "pm install" (works on userdebug/eng builds),
- *   5. falls back to launching known helper apps (TV guard, file manager,
- *      Huan helper),
- *   6. returns a detailed, human-readable diagnostic report.
+ * Installs the downloaded Gecko engine APK through every channel available on
+ * the device. Some TCL devices neither expose a standard installer activity
+ * nor allow reading files inside the caller's private Android/data directory.
+ *
+ * Channels, in order:
+ *   1. PackageInstaller session API (API 21+). This is the preferred path: it
+ *      streams the APK into a system install session and reports the exact
+ *      status code and failure message back to a status receiver.
+ *   2. Copy the APK to the public Download directory and enumerate every
+ *      activity that can install/view an APK at runtime.
+ *   3. Hidden PackageManager.installPackage framework method.
+ *   4. Root "pm install" (works on userdebug/eng builds).
+ *   5. Launch a known helper app (TV guard, file manager, Huan helper).
  */
 public final class ApkInstaller {
 
     private static final String TAG = "ApkInstaller";
     private static final String PUBLIC_APK_NAME = "GeckoEngine.apk";
     private static final String MIME_APK = "application/vnd.android.package-archive";
+    private static final String SESSION_ENTRY = "base.apk";
 
-    // Known helper apps that may offer file browsing / installation on TCL
-    // and Amlogic devices. The first entry that is installed is launched.
     private static final String[] HELPER_PACKAGES = {
         "com.tcl.tvweishi",
         "com.tcl.securityapp",
@@ -68,8 +70,107 @@ public final class ApkInstaller {
     private ApkInstaller() {}
 
     /**
-     * Install the APK located at privatePath. Returns a Result describing the
-     * outcome with a full diagnostic report.
+     * Publish a private APK into the public Download directory so installers
+     * and file managers can read it. Returns the public file, or null.
+     */
+    public static File publish(File source) {
+        return publishToDownloads(source, new StringBuilder());
+    }
+
+    /**
+     * Start a PackageInstaller session install. The result is delivered
+     * asynchronously to a broadcast registered for statusAction. Returns true
+     * if the session was created and committed.
+     */
+    public static boolean startSessionInstall(Context context, File apk, String statusAction) {
+        PackageInstaller installer = obtainInstaller(context);
+        if (installer == null) {
+            Log.e(TAG, "PackageInstaller service unavailable");
+            return false;
+        }
+        PackageInstaller.Session session = null;
+        try {
+            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+                    PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            int sessionId = installer.createSession(params);
+            session = installer.openSession(sessionId);
+
+            FileInputStream in = new FileInputStream(apk);
+            OutputStream out = session.openWrite(SESSION_ENTRY, 0, apk.length());
+            byte[] buffer = new byte[65536];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                out.write(buffer, 0, read);
+            }
+            session.fsync(out);
+            in.close();
+            out.close();
+
+            Intent statusIntent = new Intent(statusAction);
+            statusIntent.setPackage(context.getPackageName());
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= 31) {
+                flags |= PendingIntent.FLAG_MUTABLE;
+            }
+            PendingIntent pending = PendingIntent.getBroadcast(
+                    context, sessionId, statusIntent, flags);
+            session.commit(pending.getIntentSender());
+            Log.i(TAG, "Install session " + sessionId + " committed");
+            return true;
+        } catch (Throwable t) {
+            Log.e(TAG, "startSessionInstall failed: " + rootMessage(t));
+            return false;
+        } finally {
+            if (session != null) {
+                try { session.close(); } catch (Throwable ignored) {}
+            }
+        }
+    }
+
+    /**
+     * Obtain the PackageInstaller via its system-service name. The compile
+     * jar used here strips Context.getPackageInstaller(), but that method is
+     * backed by the "package_installer" service on real devices.
+     */
+    private static PackageInstaller obtainInstaller(Context context) {
+        Object service = context.getSystemService("package_installer");
+        if (service instanceof PackageInstaller) {
+            return (PackageInstaller) service;
+        }
+        return null;
+    }
+
+    /**
+     * Map a PackageInstaller status code to a readable name.
+     */
+    public static String statusName(int status) {
+        switch (status) {
+            case PackageInstaller.STATUS_SUCCESS:
+                return "SUCCESS";
+            case PackageInstaller.STATUS_PENDING_USER_ACTION:
+                return "PENDING_USER_ACTION";
+            case PackageInstaller.STATUS_FAILURE:
+                return "FAILURE";
+            case PackageInstaller.STATUS_FAILURE_ABORTED:
+                return "FAILURE_ABORTED";
+            case PackageInstaller.STATUS_FAILURE_BLOCKED:
+                return "FAILURE_BLOCKED";
+            case PackageInstaller.STATUS_FAILURE_CONFLICT:
+                return "FAILURE_CONFLICT";
+            case PackageInstaller.STATUS_FAILURE_INCOMPATIBLE:
+                return "FAILURE_INCOMPATIBLE";
+            case PackageInstaller.STATUS_FAILURE_INVALID:
+                return "FAILURE_INVALID";
+            case PackageInstaller.STATUS_FAILURE_STORAGE:
+                return "FAILURE_STORAGE";
+            default:
+                return "UNKNOWN(" + status + ")";
+        }
+    }
+
+    /**
+     * Synchronous fallback chain used when the session API is unavailable.
+     * Installs the APK at privatePath and returns a detailed Result.
      */
     public static Result install(Activity activity, String privatePath) {
         StringBuilder log = new StringBuilder();
@@ -79,14 +180,9 @@ public final class ApkInstaller {
                     "APK not found: " + privatePath, null);
         }
 
-        // Step 1: publish the APK to the public Download directory so that
-        // installers and file managers can actually read it. Files under
-        // Android/data/<caller>/ are not readable by other apps.
         File publicFile = publishToDownloads(source, log);
         String publicPath = publicFile != null ? publicFile.getAbsolutePath() : null;
 
-        // Step 2: enumerate and launch every activity that can install the
-        // APK, for both the public and (if present) private locations.
         List<Uri> candidates = new ArrayList<Uri>();
         if (publicFile != null) {
             candidates.add(Uri.fromFile(publicFile));
@@ -102,22 +198,17 @@ public final class ApkInstaller {
             }
         }
 
-        // Step 3: hidden framework install. Requires INSTALL_PACKAGES and
-        // normally fails for third-party apps, but costs nothing to try.
         if (publicFile != null && tryFrameworkInstall(activity, Uri.fromFile(publicFile), log)) {
             return new Result(true, "Framework install invoked",
                     log.toString(), publicPath);
         }
 
-        // Step 4: root pm install (userdebug/eng builds may allow su).
         File rootTarget = publicFile != null ? publicFile : source;
         if (tryRootInstall(rootTarget, log)) {
             return new Result(true, "Root pm install succeeded",
                     log.toString(), publicPath);
         }
 
-        // Step 5: launch a known helper app where the user can locate the
-        // APK in the Download folder and install it manually.
         String helper = launchHelperApp(activity, log);
         if (helper != null) {
             String summary = "Helper app opened: " + helper
@@ -132,10 +223,6 @@ public final class ApkInstaller {
         return new Result(false, "No install channel available", report, publicPath);
     }
 
-    /**
-     * Copy the APK into the public Download directory and make it world
-     * readable. Returns the public file, or null if it could not be created.
-     */
     private static File publishToDownloads(File source, StringBuilder log) {
         try {
             File dir = Environment.getExternalStoragePublicDirectory(
@@ -152,7 +239,6 @@ public final class ApkInstaller {
                 append(log, "Failed to copy APK to Download directory");
                 return null;
             }
-            // Best-effort: make the file readable by every package.
             try {
                 target.setReadable(true, false);
             } catch (Throwable ignored) {}
@@ -169,10 +255,6 @@ public final class ApkInstaller {
         }
     }
 
-    /**
-     * Query and launch every activity that claims to handle APK installation
-     * or viewing for the given URI. Returns the launched component, or null.
-     */
     private static ComponentName tryAllInstallActivities(Activity activity, Uri uri,
             StringBuilder log) {
         PackageManager pm = activity.getPackageManager();
@@ -233,9 +315,6 @@ public final class ApkInstaller {
         }
     }
 
-    /**
-     * Move stock package installers to the front so they are tried first.
-     */
     private static void orderHandlers(List<HandlerTarget> handlers) {
         List<HandlerTarget> preferred = new ArrayList<HandlerTarget>();
         List<HandlerTarget> others = new ArrayList<HandlerTarget>();
@@ -252,7 +331,6 @@ public final class ApkInstaller {
         handlers.addAll(others);
     }
 
-    /** A resolved installer component paired with the action it registered. */
     private static final class HandlerTarget {
         final ComponentName component;
         final String action;
@@ -262,11 +340,6 @@ public final class ApkInstaller {
         }
     }
 
-    /**
-     * Invoke the hidden PackageManager.installPackage method via reflection.
-     * Requires the INSTALL_PACKAGES signature permission; typically throws
-     * SecurityException for ordinary apps.
-     */
     private static boolean tryFrameworkInstall(Context context, Uri uri, StringBuilder log) {
         try {
             PackageManager pm = context.getPackageManager();
@@ -283,10 +356,6 @@ public final class ApkInstaller {
         }
     }
 
-    /**
-     * Attempt a root install via "su -c pm install -r <path>". This works on
-     * userdebug/eng builds where su is reachable from app processes.
-     */
     private static boolean tryRootInstall(File apk, StringBuilder log) {
         Process process = null;
         try {
@@ -314,14 +383,8 @@ public final class ApkInstaller {
         }
     }
 
-    /**
-     * Launch the first installed helper app (TV guard, file manager, Huan
-     * helper). Returns the launched package name, or null.
-     */
     private static String launchHelperApp(Activity activity, StringBuilder log) {
         PackageManager pm = activity.getPackageManager();
-
-        // Also discover any installed file manager at runtime.
         String dynamicHelper = findFileManager(pm, log);
 
         for (String pkg : HELPER_PACKAGES) {

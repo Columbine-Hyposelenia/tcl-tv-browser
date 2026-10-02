@@ -2,10 +2,15 @@ package com.tclbrowser.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -26,12 +31,15 @@ import android.widget.TextView;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 
 public class BrowserActivity extends Activity implements Tab.Callback, ChromeToolbar.Listener {
 
     private static final String GECKO_PKG = "com.tclbrowser.gecko";
+    private static final String INSTALL_STATUS_ACTION =
+            "com.tclbrowser.tv.action.INSTALL_STATUS";
     // Mirror list: mainland-China-friendly proxies first, GitHub direct as fallback.
     // The TV often cannot establish a TCP connection to github.com:443, so we
     // try gh-proxy.com and cors.isteed.cc before falling back to direct GitHub.
@@ -58,6 +66,8 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
     private boolean desktopMode = true;
     private boolean geckoInstalled;
     private AlertDialog downloadDialog;
+    private TextView downloadStatus;
+    private BroadcastReceiver installStatusReceiver;
     private int textZoom = 100;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -126,6 +136,7 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
         });
 
         installer = new KernelInstaller(this);
+        registerInstallStatusReceiver();
         toolbar.setListener(this);
         toolbar.setDesktop(desktopMode);
 
@@ -174,6 +185,10 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
     protected void onDestroy() {
         super.onDestroy();
         handler.removeCallbacks(hideMouse);
+        if (installStatusReceiver != null) {
+            try { unregisterReceiver(installStatusReceiver); } catch (Throwable ignored) {}
+            installStatusReceiver = null;
+        }
         if (downloadDialog != null && downloadDialog.isShowing()) downloadDialog.dismiss();
         if (tab != null) tab.destroy();
         if (mouse != null) mouse.releaseAll();
@@ -186,6 +201,57 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
         } catch (PackageManager.NameNotFoundException e) {
             return false;
         }
+    }
+
+    private void registerInstallStatusReceiver() {
+        installStatusReceiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context context, Intent intent) {
+                int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS,
+                        PackageInstaller.STATUS_FAILURE);
+                String message = intent.getStringExtra(
+                        PackageInstaller.EXTRA_STATUS_MESSAGE);
+
+                if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                    Intent confirm = extractUserAction(intent);
+                    if (confirm != null) {
+                        confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        try {
+                            startActivity(confirm);
+                        } catch (Throwable t) {
+                            alert("无法启动安装确认界面：" + t.getMessage());
+                        }
+                    }
+                } else if (status == PackageInstaller.STATUS_SUCCESS) {
+                    if (downloadDialog != null && downloadDialog.isShowing()) {
+                        downloadDialog.dismiss();
+                    }
+                    geckoInstalled = true;
+                    toast("引擎安装成功");
+                } else {
+                    if (downloadDialog != null) {
+                        downloadDialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                                .setText("关闭");
+                    }
+                    String detail = ApkInstaller.statusName(status)
+                            + (message != null ? ("\n" + message) : "");
+                    alert("引擎安装失败。\n\n错误：" + detail
+                            + "\n\n请把该错误信息拍照反馈，以便定位根因。");
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter(INSTALL_STATUS_ACTION);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(installStatusReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(installStatusReceiver, filter);
+        }
+    }
+
+    private Intent extractUserAction(Intent intent) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            return intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent.class);
+        }
+        return intent.getParcelableExtra(Intent.EXTRA_INTENT);
     }
 
     private void showMouse() {
@@ -688,6 +754,7 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
         bar.setMax(100);
         final TextView status = new TextView(this);
         status.setText("正在连接...");
+        downloadStatus = status;
         box.addView(bar);
         box.addView(status);
 
@@ -716,39 +783,23 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
                 status.setText("下载完成，正在准备安装...");
                 new Thread(new Runnable() {
                     @Override public void run() {
-                        final ApkInstaller.Result result =
-                                ApkInstaller.install(BrowserActivity.this, apkPath);
+                        File publicFile = ApkInstaller.publish(new File(apkPath));
+                        final File sessionTarget =
+                                publicFile != null ? publicFile : new File(apkPath);
                         handler.post(new Runnable() {
                             @Override public void run() {
-                                if (result.success) {
-                                    if (downloadDialog != null && downloadDialog.isShowing()) {
-                                        downloadDialog.dismiss();
-                                    }
-                                    toast("安装程序已启动，请按提示完成安装");
-                                } else {
-                                    status.setText("需要手动完成安装");
-                                    if (downloadDialog != null) {
-                                        downloadDialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-                                                .setText("关闭");
-                                    }
-                                    StringBuilder guide = new StringBuilder();
-                                    guide.append(result.summary).append("\n\n");
-                                    if (result.publicPath != null) {
-                                        guide.append("安装包已复制到：\n").append(result.publicPath)
-                                                .append("\n\n");
-                                    }
-                                    guide.append("你可以：\n"
-                                            + "1. 在刚打开的应用/Download 文件夹中找到 "
-                                            + "GeckoEngine.apk 并安装\n"
-                                            + "2. 将该 APK 拷贝到 U 盘，通过 U 盘安装\n"
-                                            + "3. 用电脑执行 adb install 安装\n\n"
-                                            + "【诊断信息】\n").append(result.report);
-                                    alert(guide.toString());
+                                status.setText("正在启动系统安装会话...");
+                                boolean started = ApkInstaller.startSessionInstall(
+                                        BrowserActivity.this, sessionTarget,
+                                        INSTALL_STATUS_ACTION);
+                                if (started) {
+                                    return;
                                 }
+                                fallbackInstall(apkPath);
                             }
                         });
                     }
-                }, "apk-install").start();
+                }, "apk-publish").start();
             }
             @Override public void onError(String error) {
                 status.setText("失败：" + error);
@@ -757,6 +808,54 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
                 }
             }
         });
+    }
+
+    /**
+     * Synchronous fallback used when the PackageInstaller session API cannot
+     * be started. Runs the intent/framework/root/helper chain off the main
+     * thread and presents its result.
+     */
+    private void fallbackInstall(final String apkPath) {
+        if (downloadStatus != null) {
+            downloadStatus.setText("正在尝试其他安装方式...");
+        }
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final ApkInstaller.Result result =
+                        ApkInstaller.install(BrowserActivity.this, apkPath);
+                handler.post(new Runnable() {
+                    @Override public void run() {
+                        if (result.success) {
+                            if (downloadDialog != null && downloadDialog.isShowing()) {
+                                downloadDialog.dismiss();
+                            }
+                            toast("安装程序已启动，请按提示完成安装");
+                        } else {
+                            if (downloadStatus != null) {
+                                downloadStatus.setText("需要手动完成安装");
+                            }
+                            if (downloadDialog != null) {
+                                downloadDialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                                        .setText("关闭");
+                            }
+                            StringBuilder guide = new StringBuilder();
+                            guide.append(result.summary).append("\n\n");
+                            if (result.publicPath != null) {
+                                guide.append("安装包已复制到：\n").append(result.publicPath)
+                                        .append("\n\n");
+                            }
+                            guide.append("你可以：\n"
+                                    + "1. 在刚打开的应用/Download 文件夹中找到 "
+                                    + "GeckoEngine.apk 并安装\n"
+                                    + "2. 将该 APK 拷贝到 U 盘，通过 U 盘安装\n"
+                                    + "3. 用电脑执行 adb install 安装\n\n"
+                                    + "【诊断信息】\n").append(result.report);
+                            alert(guide.toString());
+                        }
+                    }
+                });
+            }
+        }, "apk-install").start();
     }
 
     private void clearCache() {
