@@ -67,6 +67,8 @@ public class GeckoEngineActivity extends Activity {
     private boolean canBack;
     private boolean canForward;
     private boolean loading;
+    private int crashCount;
+    private int killCount;
     private Toast toastInstance;
 
     @Override
@@ -207,12 +209,21 @@ public class GeckoEngineActivity extends Activity {
             @Override public void onExternalResponse(GeckoSession session, WebResponse response) {
                 handleDownload(response);
             }
-            @Override public void onCrash(GeckoSession session) {
-                toast("Page crashed");
-                if (!isPopup) loadHome();
+            @Override public void onCrash(GeckoSession s) {
+                crashCount++;
+                if (isPopup) {
+                    recoverPopup("网页进程崩溃，弹窗已自动关闭");
+                } else {
+                    recoverMain("网页进程崩溃，正在自动恢复…");
+                }
             }
-            @Override public void onKill(GeckoSession session) {
-                toast("Page was killed");
+            @Override public void onKill(GeckoSession s) {
+                killCount++;
+                if (isPopup) {
+                    recoverPopup("内存不足，弹窗已自动关闭");
+                } else {
+                    recoverMain("系统内存不足，网页被终止，正在恢复…");
+                }
             }
         });
 
@@ -303,6 +314,31 @@ public class GeckoEngineActivity extends Activity {
     private View activeView() {
         return popupFrame.getVisibility() == View.VISIBLE && popupView != null
                 ? popupView : geckoView;
+    }
+
+    private void recoverMain(final String message) {
+        toast(message);
+        handler.postDelayed(new Runnable() {
+            @Override public void run() {
+                try {
+                    // After a crash the session is closed; reopen it to recover,
+                    // then reload the home page. open() on an open session throws,
+                    // which is harmless and ignored.
+                    try { session.open(runtime); } catch (Throwable ignored) {}
+                    geckoView.requestFocus();
+                    loadHome();
+                } catch (Throwable t) {
+                    toast("自动恢复失败，请退出后重新打开浏览器");
+                }
+            }
+        }, 300);
+    }
+
+    private void recoverPopup(final String message) {
+        toast(message);
+        handler.post(new Runnable() {
+            @Override public void run() { closePopup(); }
+        });
     }
 
     private void loadHome() {
@@ -516,7 +552,8 @@ public class GeckoEngineActivity extends Activity {
 
     private void openSupport() {
         activeSession().loadUri("about:support");
-        toast("请查看“图形(Graphics)”部分");
+        toast("崩溃 " + crashCount + " 次 / 内存终止 " + killCount
+                + " 次，请查看“图形(Graphics)”部分");
     }
 
     private void showShortcutsHelp() {
@@ -578,6 +615,7 @@ public class GeckoEngineActivity extends Activity {
         popupSession.open(runtime);
         if (uri != null) popupSession.loadUri(uri);
 
+        popupView.requestFocus();
         popupFrame.setVisibility(View.VISIBLE);
         mouse.setTarget(popupFrame);
         showMouse();
@@ -599,6 +637,7 @@ public class GeckoEngineActivity extends Activity {
         popupView = null;
         popupFrame.setVisibility(View.GONE);
         mouse.setTarget(root);
+        if (geckoView != null) geckoView.requestFocus();
     }
 
     private void handleDownload(final WebResponse response) {
@@ -659,10 +698,16 @@ public class GeckoEngineActivity extends Activity {
         } catch (Throwable ignored) {}
     }
 
+    private boolean isFullKeyboard(final InputDevice device) {
+        return device != null
+                && device.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC;
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         int action = event.getAction();
         int code = event.getKeyCode();
+        boolean fullKeyboard = isFullKeyboard(event.getDevice());
 
         if (toolbar.getUrlBar().isEditing()) {
             if (code == KeyEvent.KEYCODE_BACK && action == KeyEvent.ACTION_UP) {
@@ -676,9 +721,32 @@ public class GeckoEngineActivity extends Activity {
             return super.dispatchKeyEvent(event);
         }
 
-        if (action == KeyEvent.ACTION_DOWN) {
-            if (handleShortcut(code, event)) return true;
-            if (event.getRepeatCount() == 0 && handlePageKey(code, event)) return true;
+        if (action == KeyEvent.ACTION_DOWN && handleShortcut(code, event)) {
+            return true;
+        }
+
+        // A real alphabetic keyboard behaves like a desktop browser: navigation,
+        // scrolling, text entry and focus keys go straight to the focused
+        // GeckoView, without moving the virtual mouse.
+        if (fullKeyboard) {
+            if (code == KeyEvent.KEYCODE_BACK && action == KeyEvent.ACTION_UP) {
+                if (popupFrame.getVisibility() == View.VISIBLE) {
+                    closePopup();
+                    return true;
+                }
+                if (pageFullscreen) return super.dispatchKeyEvent(event);
+                if (immersive) {
+                    setImmersiveMode(false);
+                    return true;
+                }
+            }
+            return super.dispatchKeyEvent(event);
+        }
+
+        // Remote / non-alphabetic controls: arrow and OK keys drive the mouse.
+        if (event.getRepeatCount() == 0 && action == KeyEvent.ACTION_DOWN
+                && handlePageKey(code, event)) {
+            return true;
         }
 
         if (action == KeyEvent.ACTION_DOWN) {

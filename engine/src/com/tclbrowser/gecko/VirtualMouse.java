@@ -19,9 +19,9 @@ public class VirtualMouse extends View {
     private static final int LEFT = 2;
     private static final int RIGHT = 3;
 
-    private static final float BASE_SPEED = 190f;
-    private static final float MAX_SPEED = 820f;
-    private static final float ACCEL = 950f;
+    private static final float BASE_SPEED = 155f;
+    private static final float MAX_SPEED = 560f;
+    private static final float ACCEL = 470f;
     private static final float EDGE = 6f;
     private static final long SCROLL_INTERVAL_MS = 160;
 
@@ -128,8 +128,12 @@ public class VirtualMouse extends View {
         int d = directionOf(keyCode);
         if (d >= 0) {
             if (!dirs[d]) {
+                boolean wasIdle = !anyDirection();
                 dirs[d] = true;
-                if (!anyDirection()) moveStart = SystemClock.uptimeMillis();
+                long now = SystemClock.uptimeMillis();
+                // Restart acceleration on a fresh stroke or an immediate
+                // reversal, so fine corrections begin at the base speed.
+                if (wasIdle || dirs[opposite(d)]) moveStart = now;
                 ensureTicking();
             }
             return true;
@@ -163,6 +167,15 @@ public class VirtualMouse extends View {
             case KeyEvent.KEYCODE_DPAD_LEFT: return LEFT;
             case KeyEvent.KEYCODE_DPAD_RIGHT: return RIGHT;
             default: return -1;
+        }
+    }
+
+    private int opposite(int d) {
+        switch (d) {
+            case UP: return DOWN;
+            case DOWN: return UP;
+            case LEFT: return RIGHT;
+            default: return LEFT;
         }
     }
 
