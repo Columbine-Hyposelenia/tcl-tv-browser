@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 
-SDK=/home/user/.doubao/agent_mode/workspace/.sessions/38444332457187330/agents/m_0cwps1nIzyG/android-sdk
-JDK=/home/user/.doubao/agent_mode/workspace/.sessions/38444332457187330/agents/m_0cwps1nIzyG/jdk-11.0.32.1+1
+SDK=/home/user/android-sdk
+JDK=/usr/lib/jvm/java-11-openjdk-amd64
 export PATH="$JDK/bin:$PATH"
-BT=$SDK/build-tools/30.0.3
-ANDROID_JAR=$SDK/platforms/android-22/android.jar
+BT=$SDK/build-tools/35.0.0
+ANDROID_JAR=$SDK/platforms/android-37.0/android.jar
 
-PROJECT=/home/user/Doubao/chats/38444332457187330/devinfo
+PROJECT=/home/user/Doubao/chats/38445209063873794/tcl-tv-browser/devinfo
 cd "$PROJECT"
 
 rm -rf gen obj bin sources.txt
@@ -24,7 +24,6 @@ mkdir -p gen obj bin
 # Compile Java sources
 find src gen -name '*.java' > sources.txt
 javac -source 1.8 -target 1.8 -encoding UTF-8 \
-  -bootclasspath "$ANDROID_JAR" \
   -classpath "$ANDROID_JAR" \
   -d obj @sources.txt
 

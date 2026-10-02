@@ -140,31 +140,47 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------------
 
     private void collect() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("TCL TV device report\n");
-        sb.append("Generated: ").append(new java.util.Date()).append("\n");
-        sb.append("App: com.tclbrowser.devinfo\n\n");
+        status.setText("Collecting...");
+        new Thread(new Runnable() {
+            @Override public void run() {
+                StringBuilder sb = new StringBuilder();
+                sb.append("TCL TV device report\n");
+                sb.append("Generated: ").append(new java.util.Date()).append("\n");
+                sb.append("App: com.tclbrowser.devinfo\n\n");
 
-        sectionBuild(sb);
-        sectionAbi(sb);
-        sectionCpu(sb);
-        sectionMemory(sb);
-        sectionDisplay(sb);
-        sectionGl(sb);
-        sectionWebView(sb);
-        sectionKernel(sb);
-        sectionCodecs(sb);
-        sectionInput(sb);
-        sectionStorage(sb);
-        sectionNetwork(sb);
-        sectionFeatures(sb);
-        sectionPropsFiltered(sb);
+                sectionBuild(sb);
+                sectionAbi(sb);
+                sectionCpu(sb);
+                sectionMemory(sb);
+                sectionDisplay(sb);
+                sectionGl(sb);
+                sectionWebView(sb);
+                sectionKernel(sb);
+                sectionCodecs(sb);
+                sectionInput(sb);
+                sectionStorage(sb);
+                sectionNetwork(sb);
+                sectionFeatures(sb);
+                sectionPropsFiltered(sb);
+                sectionInstaller(sb);
 
-        mainReport = sb.toString();
-        output.setText(mainReport);
-        scroll.scrollTo(0, 0);
-        fullProps = exec("getprop");
-        status.setText("Collect done. Press Export to save full report.");
+                final String report = sb.toString();
+                fullProps = exec("getprop");
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        mainReport = report;
+                        output.setText(mainReport);
+                        scroll.scrollTo(0, 0);
+                        status.setText("Collect done. Press Export to save full report.");
+                    }
+                });
+            }
+        }, "devinfo-collect").start();
+    }
+
+    private void sectionInstaller(StringBuilder sb) {
+        header(sb, "Installer environment");
+        sb.append(InstallerAudit.audit(getApplicationContext()));
     }
 
     private void header(StringBuilder sb, String title) {
