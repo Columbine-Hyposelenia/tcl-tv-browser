@@ -90,9 +90,9 @@ ensure_smali
 rm -rf "$WORK"
 mkdir -p "$WORK/gen" "$WORK/obj" "$WORK/tmp" "$WORK/smali_old" "$WORK/smali_new"
 
-log "generating R.java"
-"$BT/aapt" package -f -M "$HERE/AndroidManifest.xml" -S "$HERE/res" \
-    -I "$AJ" -J "$WORK/gen" 2>/dev/null || true
+log "extracting ID-correct R.java from packaged APK"
+"$BT/aapt" dump resources "$OUT_APK" > "$WORK/resources.txt" 2>/dev/null
+python3 "$HERE/gen_r_from_apk.py" "$WORK/resources.txt" "$WORK/gen/R.java"
 
 log "compiling app sources"
 find "$HERE/src" -name '*.java' > "$WORK/sources.txt"

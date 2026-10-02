@@ -47,6 +47,8 @@ public class GeckoEngineActivity extends Activity {
 
     private static final String CLOUD_URL = "https://ys.mihoyo.com/cloud/";
 
+    private static final int BG_COLOR = 0xFF0B0E16;
+
     private static GeckoRuntime runtime;
 
     private FrameLayout root;
@@ -174,7 +176,8 @@ public class GeckoEngineActivity extends Activity {
         geckoView = new GeckoView(this);
         geckoView.setFocusable(true);
         geckoView.setFocusableInTouchMode(true);
-        geckoView.setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW);
+        geckoView.setViewBackend(GeckoView.BACKEND_SURFACE_VIEW);
+        geckoView.coverUntilFirstPaint(BG_COLOR);
         contentFrame.addView(geckoView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -474,6 +477,7 @@ public class GeckoEngineActivity extends Activity {
             "返回主页",
             "云原神",
             "下载管理",
+            "故障诊断信息",
             popupShown ? "关闭弹窗" : "键盘快捷键"
         };
         new AlertDialog.Builder(this)
@@ -490,7 +494,8 @@ public class GeckoEngineActivity extends Activity {
                                 session.loadUri(CLOUD_URL);
                                 break;
                             case 5: openDownloads(); break;
-                            case 6:
+                            case 6: openSupport(); break;
+                            case 7:
                                 if (popupShown) closePopup();
                                 else showShortcutsHelp();
                                 break;
@@ -510,6 +515,11 @@ public class GeckoEngineActivity extends Activity {
                     Environment.DIRECTORY_DOWNLOADS);
             toast("下载目录：" + dir.getAbsolutePath());
         }
+    }
+
+    private void openSupport() {
+        activeSession().loadUri("about:support");
+        toast("请查看“图形(Graphics)”部分");
     }
 
     private void showShortcutsHelp() {
@@ -557,6 +567,7 @@ public class GeckoEngineActivity extends Activity {
 
         popupView = new GeckoView(this);
         popupView.setViewBackend(GeckoView.BACKEND_TEXTURE_VIEW);
+        popupView.coverUntilFirstPaint(BG_COLOR);
         popupView.setFocusable(true);
         wrap.addView(popupView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
