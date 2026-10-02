@@ -27,7 +27,7 @@ public final class HomePage {
                  .append("<span class='label'>").append(s[0]).append("</span></a>");
         }
         return "<!DOCTYPE html><html lang='zh'><head><meta charset='utf-8'>"
-            + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            + "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no'>"
             + "<title>Home</title><style>"
             + "*{margin:0;padding:0;box-sizing:border-box;}"
             + "html,body{min-height:100%;width:100%;}"

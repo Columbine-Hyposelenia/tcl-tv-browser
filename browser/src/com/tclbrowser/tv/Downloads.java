@@ -8,6 +8,8 @@ import android.os.Environment;
 import android.webkit.CookieManager;
 import android.webkit.URLUtil;
 
+import java.io.File;
+
 public final class Downloads {
 
     private Downloads() {}
@@ -52,7 +54,33 @@ public final class Downloads {
                     (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
             Intent intent = new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent);
+            if (intent.resolveActivity(context.getPackageManager()) != null) {
+                context.startActivity(intent);
+                return;
+            }
+            // Fallback: try opening the Downloads directory via a file manager
+            try {
+                File dlDir = Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS);
+                Intent fileIntent = new Intent(Intent.ACTION_VIEW);
+                fileIntent.setDataAndType(Uri.fromFile(dlDir),
+                        "resource/folder");
+                fileIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (fileIntent.resolveActivity(context.getPackageManager()) != null) {
+                    context.startActivity(fileIntent);
+                    return;
+                }
+            } catch (Throwable ignored) {
+                // fall through
+            }
+            // Last resort: show a toast with the download path
+            if (context instanceof android.app.Activity) {
+                android.widget.Toast.makeText(context,
+                        "Download manager not available. Files are saved to: "
+                        + Environment.getExternalStoragePublicDirectory(
+                                Environment.DIRECTORY_DOWNLOADS).getAbsolutePath(),
+                        android.widget.Toast.LENGTH_LONG).show();
+            }
         } catch (Throwable ignored) {}
     }
 }

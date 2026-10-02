@@ -290,49 +290,93 @@ public class KernelInstaller {
     }
 
     /**
-     * Launch the system package installer for the given APK.
-     * Uses ACTION_INSTALL_PACKAGE and tries to pin the package installer
-     * explicitly so that file managers (e.g. Baidu Netdisk) do not hijack
-     * the VIEW intent.
+     * Result of attempting to launch the system package installer.
      */
-    public static void installApk(Activity activity, String path) {
+    public static class InstallResult {
+        public final boolean success;
+        public final String message;
+        public final String filePath;
+        InstallResult(boolean success, String message, String filePath) {
+            this.success = success;
+            this.message = message;
+            this.filePath = filePath;
+        }
+    }
+
+    /**
+     * Launch the system package installer for the given APK.
+     * Tries ACTION_INSTALL_PACKAGE with known package installer names first,
+     * then falls back to unpinned ACTION_INSTALL_PACKAGE, then ACTION_VIEW.
+     * Returns an InstallResult describing what happened; on failure the
+     * message includes the file path so the user can install manually.
+     */
+    public static InstallResult installApk(Activity activity, String path) {
         File file = new File(path);
-        if (!file.exists()) return;
+        if (!file.exists()) {
+            return new InstallResult(false, "APK file not found: " + path, path);
+        }
+        long size = file.length();
         Uri uri = Uri.fromFile(file);
+        String sizeStr = formatSize(size);
 
-        Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-        intent.setDataAndType(uri, "application/vnd.android.package-archive");
-        intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        Intent installIntent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+        installIntent.setDataAndType(uri, "application/vnd.android.package-archive");
+        installIntent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+        installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-        // Try the standard package installer first to avoid hijacking by
-        // third-party file managers / cloud storage apps.
-        String[] installers = {
+        String[] installerPkgs = {
             "com.android.packageinstaller",
             "com.google.android.packageinstaller",
+            "com.tcl.packageinstaller",
+            "com.tcl.tv.packageinstaller",
         };
-        for (String pkg : installers) {
+
+        for (String pkg : installerPkgs) {
             try {
-                Intent pinned = new Intent(intent);
+                Intent pinned = new Intent(installIntent);
                 pinned.setPackage(pkg);
-                activity.startActivity(pinned);
-                return;
+                if (pinned.resolveActivity(activity.getPackageManager()) != null) {
+                    activity.startActivity(pinned);
+                    return new InstallResult(true, "Launched installer: " + pkg, path);
+                }
             } catch (Throwable ignored) {
                 // try next
             }
         }
-        // Fallback: un-pinned intent, system will resolve
+
         try {
-            activity.startActivity(intent);
-        } catch (Throwable t) {
-            // Last resort: ACTION_VIEW
-            try {
-                Intent view = new Intent(Intent.ACTION_VIEW);
-                view.setDataAndType(uri, "application/vnd.android.package-archive");
-                view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                activity.startActivity(view);
-            } catch (Throwable ignored) {}
+            if (installIntent.resolveActivity(activity.getPackageManager()) != null) {
+                activity.startActivity(installIntent);
+                return new InstallResult(true, "Launched system installer", path);
+            }
+        } catch (Throwable ignored) {
+            // fall through
         }
+
+        try {
+            Intent view = new Intent(Intent.ACTION_VIEW);
+            view.setDataAndType(uri, "application/vnd.android.package-archive");
+            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (view.resolveActivity(activity.getPackageManager()) != null) {
+                activity.startActivity(view);
+                return new InstallResult(true, "Launched via ACTION_VIEW", path);
+            }
+        } catch (Throwable ignored) {
+            // fall through
+        }
+
+        return new InstallResult(false,
+                "No package installer available on this device. "
+                + "Please install manually using a file manager. "
+                + "APK location: " + path + " (" + sizeStr + ")",
+                path);
+    }
+
+    private static String formatSize(long bytes) {
+        if (bytes <= 0) return "0 B";
+        double mb = bytes / 1048576.0;
+        if (mb >= 1) return String.format(java.util.Locale.US, "%.1f MB", mb);
+        return String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0);
     }
 
     private void postStatus(final Listener l, final String s) {

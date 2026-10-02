@@ -713,10 +713,26 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
                         + " / " + formatSize(total));
             }
             @Override public void onReady(String apkPath) {
-                if (downloadDialog != null && downloadDialog.isShowing()) {
-                    downloadDialog.dismiss();
+                status.setText("下载完成，正在启动安装程序...");
+                KernelInstaller.InstallResult result =
+                        KernelInstaller.installApk(BrowserActivity.this, apkPath);
+                if (result.success) {
+                    if (downloadDialog != null && downloadDialog.isShowing()) {
+                        downloadDialog.dismiss();
+                    }
+                    toast("安装程序已启动，请按提示完成安装");
+                } else {
+                    status.setText("安装启动失败");
+                    if (downloadDialog != null) {
+                        downloadDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setText("关闭");
+                    }
+                    alert("无法启动系统安装程序。\n\n"
+                            + result.message + "\n\n"
+                            + "你可以：\n"
+                            + "1. 在电视文件管理器中找到上述路径的 APK 手动安装\n"
+                            + "2. 将 APK 拷贝到 U 盘，通过 U 盘安装\n"
+                            + "3. 在手机上下载后通过欢视助手/投屏工具安装到电视");
                 }
-                KernelInstaller.installApk(BrowserActivity.this, apkPath);
             }
             @Override public void onError(String error) {
                 status.setText("失败：" + error);

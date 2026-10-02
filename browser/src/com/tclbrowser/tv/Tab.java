@@ -170,6 +170,10 @@ public class Tab {
 
     public void loadHome() {
         if (webView != null) {
+            // Reset zoom so the home page always renders at 100% regardless
+            // of the zoom level left by the previous page.
+            webView.setInitialScale(0);
+            webView.getSettings().setTextZoom(100);
             webView.loadDataWithBaseURL("https://home.local/", HomePage.html(),
                     "text/html", "UTF-8", null);
         } else {
