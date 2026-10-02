@@ -12,6 +12,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Base64;
 import android.util.TypedValue;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -305,14 +306,13 @@ public class GeckoEngineActivity extends Activity {
     }
 
     private void loadHome() {
-        try {
-            String data = "data:text/html;charset=utf-8,"
-                    + java.net.URLEncoder.encode(HomePage.html(), "UTF-8");
-            session.loadUri(data);
-            toolbar.setUrl("");
-        } catch (Exception e) {
-            session.loadUri("https://cn.bing.com");
-        }
+        // Base64 data URI avoids the form-URL-encoding issues (spaces
+        // becoming '+', quotes being percent-encoded) that broke rendering.
+        String encoded = Base64.encodeToString(
+                HomePage.html().getBytes(java.nio.charset.Charset.forName("UTF-8")),
+                Base64.NO_WRAP);
+        session.loadUri("data:text/html;base64," + encoded);
+        toolbar.setUrl("");
     }
 
     private void navigate(String text) {
@@ -355,6 +355,7 @@ public class GeckoEngineActivity extends Activity {
     }
 
     private void showMouse() {
+        mouse.show();
         handler.removeCallbacks(hideMouseRunnable);
         handler.postDelayed(hideMouseRunnable, 4500);
     }
@@ -385,22 +386,27 @@ public class GeckoEngineActivity extends Activity {
         switch (code) {
             case WebRequestError.ERROR_UNKNOWN_HOST: return "无法找到服务器，请检查网址是否正确";
             case WebRequestError.ERROR_CONNECTION_REFUSED: return "服务器拒绝了连接";
-            case WebRequestError.ERROR_TIMEOUT:
             case WebRequestError.ERROR_NET_TIMEOUT: return "连接超时，请检查网络后重试";
-            case WebRequestError.ERROR_CONNECTION_RESET: return "连接被重置";
-            case WebRequestError.ERROR_NETWORK_CHANGED: return "网络已切换，请刷新重试";
+            case WebRequestError.ERROR_NET_RESET:
+            case WebRequestError.ERROR_NET_INTERRUPT: return "连接被中断，请刷新重试";
             case WebRequestError.ERROR_OFFLINE: return "设备未连接到网络";
-            case WebRequestError.ERROR_ADDRESS_UNREACHABLE: return "无法访问该地址";
+            case WebRequestError.ERROR_SECURITY_SSL:
             case WebRequestError.ERROR_SECURITY_BAD_CERT:
             case WebRequestError.ERROR_BAD_HSTS_CERT: return "网站安全证书存在问题";
-            case WebRequestError.ERROR_PROXY_CONNECTION_REFUSED: return "代理服务器连接失败";
+            case WebRequestError.ERROR_PROXY_CONNECTION_REFUSED:
+            case WebRequestError.ERROR_UNKNOWN_PROXY_HOST: return "代理服务器连接失败";
             case WebRequestError.ERROR_CONTENT_CRASHED: return "页面崩溃，请刷新重试";
             case WebRequestError.ERROR_MALFORMED_URI: return "网址格式错误";
-            case WebRequestError.ERROR_REDIRECT_LOOP:
-            case WebRequestError.ERROR_TOO_MANY_REDIRECTS: return "页面重定向次数过多";
+            case WebRequestError.ERROR_REDIRECT_LOOP: return "页面重定向次数过多";
             case WebRequestError.ERROR_FILE_NOT_FOUND: return "文件不存在";
             case WebRequestError.ERROR_FILE_ACCESS_DENIED: return "文件访问被拒绝";
-            case WebRequestError.ERROR_UNKNOWN_URL_SCHEME: return "不支持的网址协议";
+            case WebRequestError.ERROR_UNKNOWN_PROTOCOL:
+            case WebRequestError.ERROR_UNKNOWN_SOCKET_TYPE: return "不支持的网址协议";
+            case WebRequestError.ERROR_UNSAFE_CONTENT_TYPE:
+            case WebRequestError.ERROR_INVALID_CONTENT_ENCODING: return "网页内容无法解析";
+            case WebRequestError.ERROR_PORT_BLOCKED: return "网络端口被限制";
+            case WebRequestError.ERROR_DATA_URI_TOO_LONG: return "网址过长";
+            case WebRequestError.ERROR_HTTPS_ONLY: return "需要 HTTPS 安全连接";
             default: return "网络错误，错误码 " + code;
         }
     }

@@ -43,11 +43,11 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
     // Mirror list: mainland-China-friendly proxies first, GitHub direct as fallback.
     // The TV often cannot establish a TCP connection to github.com:443, so we
     // try gh-proxy.com and cors.isteed.cc before falling back to direct GitHub.
-    // v1.2 carries the fixed engine (no leading ./ in APK entry names).
+    // v1.3: rebuilt engine (Chinese UI, working virtual mouse, fixed home page).
     private static final String[] GECKO_APK_URLS = {
-        "https://gh-proxy.com/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.2/engine.apk",
-        "https://cors.isteed.cc/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.2/engine.apk",
-        "https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.2/engine.apk",
+        "https://gh-proxy.com/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.3/engine.apk",
+        "https://cors.isteed.cc/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.3/engine.apk",
+        "https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.3/engine.apk",
     };
     private static final long MOUSE_HIDE_MS = 4500;
 
@@ -81,6 +81,13 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
         super.onCreate(savedInstanceState);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
+
+        // Unified entry: once the full Gecko browser is installed, opening this
+        // small launcher package forwards straight into it. The downloader UI
+        // below is only shown while the engine is missing.
+        if (isPackageInstalled(GECKO_PKG) && launchGeckoAndFinish()) {
+            return;
+        }
 
         root = new FrameLayout(this);
         root.setLayoutParams(new ViewGroup.LayoutParams(
@@ -228,6 +235,7 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
                     }
                     geckoInstalled = true;
                     toast("引擎安装成功");
+                    launchGeckoAndFinish();
                 } else {
                     if (downloadDialog != null) {
                         downloadDialog.getButton(AlertDialog.BUTTON_NEGATIVE)
@@ -734,12 +742,23 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
                 .show();
     }
 
+    private boolean launchGeckoAndFinish() {
+        Intent launch = getPackageManager().getLaunchIntentForPackage(GECKO_PKG);
+        if (launch == null) return false;
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            startActivity(launch);
+            finish();
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     private void handleGecko() {
         if (geckoInstalled) {
-            Intent launch = getPackageManager().getLaunchIntentForPackage(GECKO_PKG);
-            if (launch != null) {
-                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(launch);
+            if (!launchGeckoAndFinish()) {
+                toast("无法启动 Gecko 浏览器");
             }
             return;
         }
