@@ -32,7 +32,14 @@ import java.util.Map;
 public class BrowserActivity extends Activity implements Tab.Callback, ChromeToolbar.Listener {
 
     private static final String GECKO_PKG = "com.tclbrowser.gecko";
-    private static final String GECKO_APK_URL = "https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.0/engine.apk";
+    // Mirror list: mainland-China-friendly proxies first, GitHub direct as fallback.
+    // The TV often cannot establish a TCP connection to github.com:443, so we
+    // try gh-proxy.com and cors.isteed.cc before falling back to direct GitHub.
+    private static final String[] GECKO_APK_URLS = {
+        "https://gh-proxy.com/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.0/engine.apk",
+        "https://cors.isteed.cc/https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.0/engine.apk",
+        "https://github.com/Columbine-Hyposelenia/tcl-tv-browser/releases/download/v1.0/engine.apk",
+    };
     private static final long MOUSE_HIDE_MS = 4500;
 
     private FrameLayout root;
@@ -696,7 +703,7 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
                 .create();
         downloadDialog.show();
 
-        installer.download(GECKO_APK_URL, new KernelInstaller.Listener() {
+        installer.download(GECKO_APK_URLS, new KernelInstaller.Listener() {
             @Override public void onStatus(String s) {
                 status.setText(s);
             }
