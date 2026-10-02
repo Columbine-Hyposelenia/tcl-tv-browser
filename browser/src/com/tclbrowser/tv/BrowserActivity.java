@@ -712,27 +712,43 @@ public class BrowserActivity extends Activity implements Tab.Callback, ChromeToo
                 status.setText(percent + "%   " + formatSize(downloaded)
                         + " / " + formatSize(total));
             }
-            @Override public void onReady(String apkPath) {
-                status.setText("下载完成，正在启动安装程序...");
-                KernelInstaller.InstallResult result =
-                        KernelInstaller.installApk(BrowserActivity.this, apkPath);
-                if (result.success) {
-                    if (downloadDialog != null && downloadDialog.isShowing()) {
-                        downloadDialog.dismiss();
+            @Override public void onReady(final String apkPath) {
+                status.setText("下载完成，正在准备安装...");
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        final ApkInstaller.Result result =
+                                ApkInstaller.install(BrowserActivity.this, apkPath);
+                        handler.post(new Runnable() {
+                            @Override public void run() {
+                                if (result.success) {
+                                    if (downloadDialog != null && downloadDialog.isShowing()) {
+                                        downloadDialog.dismiss();
+                                    }
+                                    toast("安装程序已启动，请按提示完成安装");
+                                } else {
+                                    status.setText("需要手动完成安装");
+                                    if (downloadDialog != null) {
+                                        downloadDialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                                                .setText("关闭");
+                                    }
+                                    StringBuilder guide = new StringBuilder();
+                                    guide.append(result.summary).append("\n\n");
+                                    if (result.publicPath != null) {
+                                        guide.append("安装包已复制到：\n").append(result.publicPath)
+                                                .append("\n\n");
+                                    }
+                                    guide.append("你可以：\n"
+                                            + "1. 在刚打开的应用/Download 文件夹中找到 "
+                                            + "GeckoEngine.apk 并安装\n"
+                                            + "2. 将该 APK 拷贝到 U 盘，通过 U 盘安装\n"
+                                            + "3. 用电脑执行 adb install 安装\n\n"
+                                            + "【诊断信息】\n").append(result.report);
+                                    alert(guide.toString());
+                                }
+                            }
+                        });
                     }
-                    toast("安装程序已启动，请按提示完成安装");
-                } else {
-                    status.setText("安装启动失败");
-                    if (downloadDialog != null) {
-                        downloadDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setText("关闭");
-                    }
-                    alert("无法启动系统安装程序。\n\n"
-                            + result.message + "\n\n"
-                            + "你可以：\n"
-                            + "1. 在电视文件管理器中找到上述路径的 APK 手动安装\n"
-                            + "2. 将 APK 拷贝到 U 盘，通过 U 盘安装\n"
-                            + "3. 在手机上下载后通过欢视助手/投屏工具安装到电视");
-                }
+                }, "apk-install").start();
             }
             @Override public void onError(String error) {
                 status.setText("失败：" + error);
